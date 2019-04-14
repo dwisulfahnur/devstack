@@ -41,13 +41,11 @@ help: ## Display this help message
 requirements: ## Install requirements
 	pip install -r requirements/base.txt
 
+upgrade: export CUSTOM_COMPILE_COMMAND=make upgrade
 upgrade: ## Upgrade requirements with pip-tools
 	pip install -qr requirements/pip-tools.txt
 	pip-compile --upgrade -o requirements/pip-tools.txt requirements/pip-tools.in
 	pip-compile --upgrade -o requirements/base.txt requirements/base.in
-	bash post-pip-compile.sh \
-		requirements/pip-tools.txt \
-		requirements/base.txt \
 
 dev.checkout: ## Check out "openedx-release/$OPENEDX_RELEASE" in each repo if set, "master" otherwise
 	./repo.sh checkout
@@ -60,7 +58,7 @@ dev.provision.run: ## Provision all services with local mounted directories
 
 dev.provision: | check-memory dev.clone dev.provision.run stop ## Provision dev environment with all services stopped
 
-dev.provision.xqueue: | check-memory dev.provision.xqueue.run stop stop.xqueue
+dev.provision.xqueue: | check-memory dev.provision.xqueue.run stop stop.xqueue  # Provision XQueue; run after other services are provisioned
 
 dev.provision.xqueue.run:
 	DOCKER_COMPOSE_FILES="-f docker-compose.yml -f docker-compose-xqueue.yml" $(WINPTY) bash ./provision-xqueue.sh
@@ -109,7 +107,7 @@ stop.watchers: ## Stop asset watchers
 
 stop.all: | stop.analytics_pipeline stop stop.watchers ## Stop all containers, including asset watchers
 
-stop.xqueue:
+stop.xqueue: ## Stop the XQueue service container
 	docker-compose -f docker-compose-xqueue.yml stop
 
 down: ## Remove all service containers and networks
@@ -132,10 +130,10 @@ xqueue_consumer-logs: ## View logs from containers running in detached mode
 	docker-compose -f docker-compose-xqueue.yml logs -f xqueue_consumer
 
 pull: ## Update Docker images
-	docker-compose pull --parallel
+	docker-compose pull
 
 pull.xqueue: ## Update XQueue Docker images
-	docker-compose -f docker-compose-xqueue.yml pull --parallel
+	docker-compose -f docker-compose-xqueue.yml pull
 
 validate: ## Validate the devstack configuration
 	docker-compose config
@@ -155,7 +153,7 @@ restore:  ## Restore all data volumes from the host. WARNING: THIS WILL OVERWRIT
 %-shell: ## Run a shell on the specified service container
 	docker exec -it edx.devstack.$* /bin/bash
 
-credentials-shell:
+credentials-shell: ## Run a shell on the credentials container
 	docker exec -it edx.devstack.credentials env TERM=$(TERM) bash -c 'source /edx/app/credentials/credentials_env && cd /edx/app/credentials/credentials && /bin/bash'
 
 discovery-shell: ## Run a shell on the discovery container
@@ -263,7 +261,7 @@ dev.up.analytics_pipeline: | check-memory ## Bring up analytics pipeline service
 	bash -c 'docker-compose -f docker-compose.yml -f docker-compose-analytics-pipeline.yml -f docker-compose-host.yml up -d analyticspipeline'
 
 pull.analytics_pipeline: ## Update analytics pipeline docker images
-	docker-compose -f docker-compose.yml -f docker-compose-analytics-pipeline.yml pull --parallel
+	docker-compose -f docker-compose.yml -f docker-compose-analytics-pipeline.yml pull
 
 analytics-pipeline-devstack-test: ## Run analytics pipeline tests in travis build
 	docker exec -u hadoop -i edx.devstack.analytics_pipeline bash -c 'sudo chown -R hadoop:hadoop /edx/app/analytics_pipeline && source /edx/app/hadoop/.bashrc && make develop-local && make docker-test-acceptance-local ONLY_TESTS=edx.analytics.tasks.tests.acceptance.test_internal_reporting_database && make docker-test-acceptance-local ONLY_TESTS=edx.analytics.tasks.tests.acceptance.test_user_activity'
